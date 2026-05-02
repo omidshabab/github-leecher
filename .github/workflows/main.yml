@@ -43,28 +43,28 @@ jobs:
           DOWNLOADED_FILE="${{ steps.download_file.outputs.downloaded_file_name }}"
           ORIGINAL_URL="${{ github.event.inputs.file_url }}"
 
-          # استخراج نام فایل از URL
+          
           FILENAME_FROM_URL=$(basename "$ORIGINAL_URL")
           if [[ -z "$FILENAME_FROM_URL" || "$FILENAME_FROM_URL" == "/" ]]; then
-            FILENAME_FROM_URL="$DOWNLOADED_FILE" # اگر نام فایل از URL خالی بود، از نام پیش‌فرض استفاده می‌کنیم
+            FILENAME_FROM_URL="$DOWNLOADED_FILE"
           fi
           
-          # جدا کردن نام فایل از پسوند آن
-          FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') # نام بدون پسوند
-          FILENAME_EXT="${FILENAME_FROM_URL##*.}" # پسوند فایل
+          
+          FILENAME_BASE=$(echo "$FILENAME_FROM_URL" | sed 's/\.[^.]*$//') 
+          FILENAME_EXT="${FILENAME_FROM_URL##*.}" 
 
-          # اگر پسوندی وجود نداشت (یعنی فایل بدون پسوند بود)، پسوند را خالی در نظر می‌گیریم
+          
           if [[ "$FILENAME_BASE" == "$FILENAME_FROM_URL" ]]; then
             FILENAME_EXT=""
           fi
 
-          # پیشوند دلخواه
+          
           ARCHIVE_PREFIX="sci-hub.ir_"
 
-          # ترکیب پیشوند و نام پایه فایل
+          
           FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${FILENAME_BASE}"
 
-          # --- مدیریت طول نام فایل ---
+          
           MAX_TOTAL_LEN=50
           CURRENT_LEN=${#FULL_ARCHIVE_NAME}
 
@@ -75,7 +75,7 @@ jobs:
             FULL_ARCHIVE_NAME="${ARCHIVE_PREFIX}${SHORT_FILENAME_BASE}"
           fi
           
-          # اضافه کردن پسوند نهایی (اگر وجود داشت)
+          
           if [[ -n "$FILENAME_EXT" ]]; then
             FINAL_ARCHIVE_FILENAME="${FULL_ARCHIVE_NAME}.${FILENAME_EXT}"
           else
@@ -85,7 +85,7 @@ jobs:
           echo "Original file name: ${FILENAME_FROM_URL}"
           echo "Archive base name will be: ${FINAL_ARCHIVE_FILENAME}"
 
-          # خروجی‌ها برای استفاده در step های بعدی
+          
           echo "archive_base_name=${FULL_ARCHIVE_NAME}" >> $GITHUB_OUTPUT
           echo "downloaded_file_name=${DOWNLOADED_FILE}" >> $GITHUB_OUTPUT
           echo "file_extension=${FILENAME_EXT}" >> $GITHUB_OUTPUT
@@ -107,12 +107,16 @@ jobs:
           echo "Renamed downloaded file to: $NEW_ORIGINAL_FILENAME"
           echo "new_original_filename=$NEW_ORIGINAL_FILENAME" >> $GITHUB_OUTPUT
 
+      - name: Generate timestamp for unique archive
+        id: timestamp
+        run: echo "value=$(date +%Y%m%d_%H%M%S)" >> $GITHUB_OUTPUT
+
       - name: Create encrypted split archive
         run: |
-          ARCHIVE_NAME_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}"
+          ARCHIVE_NAME_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}_${{ steps.timestamp.outputs.value }}"
           NEW_ORIGINAL_FILENAME="${{ steps.rename_file.outputs.new_original_filename }}"
 
-          # ساخت آرشیو چند تکه رمزدار ۷z (هر تکه حدود ۸۵ مگابایت)
+          #  7zip split archive into 85MB parts
           7z a -p"${{ github.event.inputs.zip_password }}" -mhe=on -mx=3 -v85m "${ARCHIVE_NAME_PREFIX}.7z" "$NEW_ORIGINAL_FILENAME"
 
       - name: Remove original downloaded file
@@ -130,11 +134,11 @@ jobs:
 
       - name: Commit and Push chunks
         run: |
-          ARCHIVE_PREFIX_FOR_GIT="${{ steps.get_filename.outputs.archive_base_name }}"
-          echo "Adding archive files matching pattern: ${ARCHIVE_PREFIX_FOR_GIT}.7z.*"
+          FINAL_ARCHIVE_PREFIX="${{ steps.get_filename.outputs.archive_base_name }}_${{ steps.timestamp.outputs.value }}"
+          echo "Adding archive files matching pattern: ${FINAL_ARCHIVE_PREFIX}.7z.*"
 
-          git add "${ARCHIVE_PREFIX_FOR_GIT}.7z.*" || echo "No split 7z chunks found."
-          git add "${ARCHIVE_PREFIX_FOR_GIT}.7z" || true
+          git add "${FINAL_ARCHIVE_PREFIX}.7z."* || echo "No split 7z chunks found."
+          git add "${FINAL_ARCHIVE_PREFIX}.7z" || true
 
           echo "Added archive chunks to staging."
 

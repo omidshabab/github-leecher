@@ -11,6 +11,11 @@ on:
         description: 'رمز عبور برای فایل فشرده'
         required: true
         type: string
+      delete_old_archives:
+        description: 'پاک کردن فایل‌های قبلی (در صورت تیک زدن، اگه فایل‌های قدیمی در مخزن باشن اتوماتیک حذف میشن)'
+        required: false
+        type: boolean
+        default: false  
 
 permissions:
   contents: write
@@ -24,6 +29,18 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 1
+
+      - name: Clean old archives (if requested)
+        if: ${{ github.event.inputs.delete_old_archives == 'true' }}
+        run: |
+         echo "حذف فایل‌های قدیمی آرشیو درخواست شد."
+    
+         find . -maxdepth 1 -type f -name "*.7z.*" -exec rm -v {} \;
+         find . -maxdepth 1 -type f -name "*.7z" -exec rm -v {} \;
+         echo "فایل‌های قدیمی آرشیو پاک شدند."
+    
+         git rm --cached *.7z.* 2>/dev/null || echo "No .7z.* files to unstage."
+         git rm --cached *.7z 2>/dev/null || echo "No .7z files to unstage."
 
       - name: Install 7z
         run: |
